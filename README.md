@@ -11,7 +11,7 @@ It is read-only against n8n. Inspired by [graphify](https://github.com/safishams
 ## Why
 
 - **Token cost.** A real workflow export is large and mostly noise. `flownav explain "Node"` is about ten lines.
-- **The rename gap.** When you rename or delete a node, n8n updates the connections but not `$('Old Name')` inside other nodes' expressions or Code nodes. Those silently break. `flownav affected "Old Name" --rename` lists exactly which nodes and parameters will break, before you change anything.
+- **The rename gap.** The n8n editor tries to rewrite `$('Old Name')` references when you rename a node, but community reports describe that as imperfect, and references inside Code nodes' JavaScript are reported not to be rewritten. Renames that don't go through the editor (the API, edited JSON, an AI agent changing a workflow) don't get that rewrite step at all, and deleting a node never fixes the references to it. A broken reference fails silently. `flownav affected "Old Name" --rename` lists exactly which nodes and parameters reference the node by name, so you can check them before and after you change anything.
 - **Cross-workflow structure.** Sub-workflows, agent tool workflows, error workflows and webhook-to-webhook calls become edges, so you can ask what calls what across your whole instance.
 
 ## Install

@@ -17,7 +17,7 @@ Then query the graph; do not open workflow JSON unless the graph cannot answer.
 - \`flownav path A B\` ordered paths with edge kinds and labels
 - \`flownav neighbors "<node>" --depth 2\`
 - \`flownav find --type httpRequest --cred slack --text "api.example"\`
-- \`flownav affected "<node>" --rename|--delete|--schema|--behavior\` **run before renaming or deleting a node**: expressions like \`$('Old Name')\` are not updated by n8n when connections are
+- \`flownav affected "<node>" --rename|--delete|--schema|--behavior\` **run before renaming or deleting a node**: references like \`$('Old Name')\` are not reliably rewritten (reportedly not inside Code nodes, and not for renames made through the API or by editing JSON), so list them first
 - \`flownav callers <workflow>\` / \`calls <workflow>\` cross-workflow links
 - \`flownav check\` fragile reads, dead refs, unreachable nodes, cycles, missing error handling
 
