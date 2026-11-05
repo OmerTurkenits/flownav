@@ -1,0 +1,16 @@
+{
+  "id": "wf-enrich",
+  "name": "Enrich customer",
+  "active": true,
+  "nodes": [
+    { "id": "1", "name": "When called", "type": "n8n-nodes-base.executeWorkflowTrigger", "typeVersion": 1, "position": [0, 0], "parameters": {} },
+    { "id": "2", "name": "Fetch CRM", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.2, "position": [220, 0],
+      "parameters": { "method": "GET", "url": "={{ $env.CRM_URL }}/customers?email={{ $json.email }}" } },
+    { "id": "3", "name": "Shape", "type": "n8n-nodes-base.set", "typeVersion": 3.4, "position": [440, 0],
+      "parameters": { "assignments": { "assignments": [ { "name": "customerId", "value": "={{ $('Fetch CRM').item.json.data.id }}" } ] } } }
+  ],
+  "connections": {
+    "When called": { "main": [[ { "node": "Fetch CRM", "type": "main", "index": 0 } ]] },
+    "Fetch CRM": { "main": [[ { "node": "Shape", "type": "main", "index": 0 } ]] }
+  }
+}

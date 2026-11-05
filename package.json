@@ -1,0 +1,46 @@
+{
+  "name": "flownav",
+  "version": "0.1.1",
+  "description": "Typed node graph for n8n workflows: explain, path, affected (rename/delete safety), checks, and an MCP server so agents navigate workflows with far fewer tokens.",
+  "author": "Omer Turkenits",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/OmerTurkenits/flownav.git"
+  },
+  "homepage": "https://github.com/OmerTurkenits/flownav#readme",
+  "bugs": {
+    "url": "https://github.com/OmerTurkenits/flownav/issues"
+  },
+  "type": "module",
+  "bin": {
+    "flownav": "dist/cli.js",
+    "fnav": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "test": "npm run build && node --test test/*.test.mjs",
+    "prepublishOnly": "npm run build"
+  },
+  "engines": {
+    "node": ">=22.12"
+  },
+  "keywords": [
+    "n8n",
+    "workflow",
+    "graph",
+    "mcp",
+    "cli"
+  ],
+  "dependencies": {
+    "commander": "^15.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "typescript": "^7.0.2"
+  }
+}

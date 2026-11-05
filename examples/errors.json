@@ -1,0 +1,12 @@
+{
+  "id": "wf-errors",
+  "name": "Error handler",
+  "active": true,
+  "nodes": [
+    { "id": "1", "name": "Error Trigger", "type": "n8n-nodes-base.errorTrigger", "typeVersion": 1, "position": [0, 0], "parameters": {} },
+    { "id": "2", "name": "Alert", "type": "n8n-nodes-base.slack", "typeVersion": 2, "position": [220, 0],
+      "credentials": { "slackApi": { "id": "cred-slack", "name": "Sales Slack" } },
+      "parameters": { "resource": "message", "operation": "post", "channelId": "C999OPS", "text": "={{ 'Failed: ' + $json.workflow.name }}" } }
+  ],
+  "connections": { "Error Trigger": { "main": [[ { "node": "Alert", "type": "main", "index": 0 } ]] } }
+}
