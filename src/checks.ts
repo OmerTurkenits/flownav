@@ -125,7 +125,7 @@ export function runChecks(g: G, only?: CheckName[]): Finding[] {
           : undefined;
         f.push({
           check: 'cycles', severity: kind ? 'info' : 'warn', wf: w.id,
-          message: `${kind ?? 'cycle without Loop Over Items or Wait'}: ${comp.map((id) => g.nodeById.get(id)!.name).join(' ⇄ ')}`,
+          message: `${kind ?? 'cycle without Loop Over Items or Wait'}: ${comp.map((id) => g.nodeById.get(id)!.name).join(' <-> ')}`,
         });
       }
     }

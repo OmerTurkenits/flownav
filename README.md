@@ -112,8 +112,8 @@ outputs:
 $ flownav affected "Normalize" --rename
 wf-orders:Normalize — impact of rename
 2 node(s) reference "Normalize" by name and will break unless their expressions are rewritten:
-  ✗ wf-orders:Notify Sales uses {email}  in text
-  ✗ wf-orders:Orphan Code uses {email}  in jsCode
+  × wf-orders:Notify Sales uses {email}  in text
+  × wf-orders:Orphan Code uses {email}  in jsCode
 ```
 
 **A path, even across workflows**
@@ -158,7 +158,7 @@ $ flownav check
   ERROR dead-refs          [wf-orders] Orphan Code reads "Deleted Step", which does not exist
   WARN  fragile-reads      [wf-orders] Orphan Code reads $('Normalize') but Normalize is not upstream via main; it may not have run
   WARN  unreachable        [wf-orders] Orphan Code is not reachable from any trigger
-  INFO  cycles             [wf-orders] loop (Loop Over Items): Ping Self ⇄ Loop Orders
+  INFO  cycles             [wf-orders] loop (Loop Over Items): Ping Self <-> Loop Orders
   INFO  dead-ends          [wf-orders] Loop Orders output [0 done] is not connected
   INFO  no-error-handler   [wf-enrich] Enrich customer has no error workflow and no node-level error handling
 ```

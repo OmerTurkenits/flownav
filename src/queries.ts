@@ -172,7 +172,7 @@ export function affected(g: G, q: string, mode: AffectMode = 'rename'): Out {
         ? `${readers.length} node(s) reference "${n.name}" by name and will ${mode === 'rename' ? 'break unless their expressions are rewritten' : 'read a missing node'}:`
         : `No expression references "${n.name}" by name.${mode === 'rename' ? " Safe to rename (connections are keyed by name; update them with the rename)." : ''}`,
     );
-    for (const e of readers) lines.push(`  ✗ ${fmtReader(e)}`);
+    for (const e of readers) lines.push(`  × ${fmtReader(e)}`);
     data.breaks = readers;
   }
   if (mode === 'delete') {
@@ -184,7 +184,7 @@ export function affected(g: G, q: string, mode: AffectMode = 'rename'): Out {
     const subs = g.inE(n.id, ['capability']);
     if (orphaned.length) {
       lines.push('lose their only input (become unreachable):');
-      for (const d of orphaned) lines.push(`  ✗ ${g.label(d)}`);
+      for (const d of orphaned) lines.push(`  × ${g.label(d)}`);
     }
     const heads = g.outE(n.id, ['capability']);
     if (heads.length) {
@@ -194,7 +194,7 @@ export function affected(g: G, q: string, mode: AffectMode = 'rename'): Out {
     const callers = g.inE(n.id, ['calls', 'webhook_calls', 'on_error']);
     if (callers.length) {
       lines.push('callers that will fail:');
-      for (const e of callers) lines.push(`  ✗ ${g.label(e.from)}  (${edgeTag(e)})`);
+      for (const e of callers) lines.push(`  × ${g.label(e.from)}  (${edgeTag(e)})`);
     }
     data.orphaned = orphaned;
     data.callers = callers;
