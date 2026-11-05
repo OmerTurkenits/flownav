@@ -1,0 +1,57 @@
+name: Bug report
+description: A workflow is misparsed, a check is wrong, or a command fails
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. **This issue is public.** Before pasting anything, remove credentials, tokens, URLs, webhook paths and any real customer data. flownav only ever stores credential ids, but an exported workflow can still contain secrets in its parameters.
+  - type: input
+    id: version
+    attributes:
+      label: flownav version
+      description: Output of `flownav --version`
+      placeholder: "0.1.1"
+    validations:
+      required: true
+  - type: input
+    id: env
+    attributes:
+      label: Node version and operating system
+      placeholder: "Node 22.12, Windows 11"
+    validations:
+      required: true
+  - type: input
+    id: n8n
+    attributes:
+      label: n8n version (if you know it)
+      placeholder: "1.70.0"
+  - type: textarea
+    id: command
+    attributes:
+      label: Command you ran
+      render: shell
+      placeholder: flownav affected "Some node" --rename
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: What happened instead
+      description: Paste the output or error.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: export
+    attributes:
+      label: Minimal sanitized workflow JSON (strongly recommended for parsing problems)
+      description: |
+        The smallest workflow that reproduces the problem. Delete `pinData`, replace credential ids and names, URLs, node names that identify your business, and any values in parameters. If it is long, attach it as a file instead of pasting.
+      render: json
