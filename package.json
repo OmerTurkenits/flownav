@@ -1,6 +1,6 @@
 {
   "name": "flownav",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Typed node graph for n8n workflows: explain, path, affected (rename/delete safety), checks, and an MCP server so agents navigate workflows with far fewer tokens.",
   "author": "Omer Turkenits",
   "license": "MIT",
