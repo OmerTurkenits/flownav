@@ -1,7 +1,7 @@
 {
   "name": "flownav",
-  "version": "0.1.2",
-  "description": "Typed node graph for n8n workflows: explain, path, affected (rename/delete safety), checks, and an MCP server so agents navigate workflows with far fewer tokens.",
+  "version": "0.1.3",
+  "description": "See what references an n8n node before you rename it. A typed graph of your workflows with a CLI and an MCP server, so AI agents read a few lines instead of the whole workflow JSON.",
   "author": "Omer Turkenits",
   "license": "MIT",
   "repository": {
@@ -32,8 +32,15 @@
   "keywords": [
     "n8n",
     "workflow",
+    "workflow-automation",
     "graph",
     "mcp",
+    "model-context-protocol",
+    "ai",
+    "ai-agents",
+    "claude",
+    "rename",
+    "static-analysis",
     "cli"
   ],
   "dependencies": {

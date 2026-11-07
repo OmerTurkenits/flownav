@@ -3,7 +3,7 @@ import type { Edge, GNode, Graph, Unresolved, WorkflowResult } from './types.js'
 import { shortType } from './util.js';
 
 /** Bump whenever extraction logic changes so cached per-workflow results are not reused. */
-export const BUILDER_VERSION = 4;
+export const BUILDER_VERSION = 5;
 
 export const wfOf = (g: Graph, id: string): string | undefined => {
   if (id.startsWith('wf:')) return id.slice(3);

@@ -54,6 +54,8 @@ export interface Edge {
   label?: string;
   fields?: string[];
   params?: string[];
+  /** the exact expression (or code line) that holds the reference, for reads edges */
+  snippets?: Array<{ param: string; text: string }>;
   confidence: Confidence;
   outputIndex?: number;
   inputIndex?: number;

@@ -23,7 +23,7 @@ const TOOLS: Array<{ name: string; description: string; schema: object; run: (g:
   { name: 'flownav_callers', description: 'Which workflows/nodes call this workflow (Execute Workflow, tool workflows, error workflow, webhook calls).', schema: { workflow: str }, run: (g, a) => callers(g, a.workflow) },
   { name: 'flownav_calls', description: 'What this workflow calls, plus unresolved dynamic calls.', schema: { workflow: str }, run: (g, a) => calls(g, a.workflow) },
   { name: 'flownav_uses', description: 'Nodes that use a credential (id, name or type).', schema: { credential: str }, run: (g, a) => uses(g, a.credential) },
-  { name: 'flownav_check', description: `Health checks: ${ALL_CHECKS.join(', ')}.`, schema: { only: str }, run: (g, a) => formatFindings(g, runChecks(g, a.only ? [a.only as CheckName] : undefined)) },
+  { name: 'flownav_check', description: `Health checks: ${ALL_CHECKS.join(', ')}. Pass only="a,b" to run some.`, schema: { only: str }, run: (g, a) => formatFindings(g, runChecks(g, a.only ? (String(a.only).split(',').map((x) => x.trim()) as CheckName[]) : undefined)) },
   { name: 'flownav_report', description: 'Full markdown workflow report.', schema: {}, run: (g) => report(g) },
 ];
 

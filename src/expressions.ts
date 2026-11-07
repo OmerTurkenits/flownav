@@ -1,6 +1,8 @@
 export interface Ref {
   name: string;
   fields: string[];
+  /** offsets (in the scanned string) where the reference starts */
+  at: number[];
 }
 
 export interface Extracted {
@@ -39,13 +41,18 @@ function field(tail: string, needAccessor: boolean): string | undefined {
 
 const unescape = (s: string): string => s.replace(/\\(.)/g, '$1');
 
-/** Text inside {{ ... }} blocks of an expression string. */
-export function expressionBodies(s: string): string {
-  const out: string[] = [];
+/** `{{ ... }}` blocks of an expression string: the inner code and where the whole block sits. */
+export function expressionBlocks(s: string): Array<{ body: string; start: number; end: number }> {
+  const out: Array<{ body: string; start: number; end: number }> = [];
   const re = /\{\{([\s\S]*?)\}\}/g;
   let m: RegExpExecArray | null;
-  while ((m = re.exec(s))) out.push(m[1]);
-  return out.join('\n');
+  while ((m = re.exec(s))) out.push({ body: m[1], start: m.index, end: m.index + m[0].length });
+  return out;
+}
+
+/** Text inside {{ ... }} blocks of an expression string. */
+export function expressionBodies(s: string): string {
+  return expressionBlocks(s).map((b) => b.body).join('\n');
 }
 
 // String literals worth keeping: the argument of $('X') / $items('X') / $node['X'] and ["field"] accesses.
@@ -54,20 +61,30 @@ const KEEP_BEFORE = /(?:\$\(|\$items\(|\$node\[|[\w$\])]\[)\s*$/;
 /**
  * Blank out comments and string-literal contents so text such as an HTML page held in a
  * string (`"...$('form')..."`) is not mistaken for a node reference. Template-literal
- * `${...}` code is kept and scanned.
+ * `${...}` code is kept and scanned. The result has the same length as the input (removed
+ * characters become spaces, newlines are kept), so offsets and line numbers still line up.
  */
 export function stripLiterals(src: string): string {
-  let out = '';
+  const a = src.split('');
+  const blank = (from: number, to: number) => {
+    for (let k = from; k < to; k++) if (a[k] !== '\n') a[k] = ' ';
+  };
+  const before = (i: number) => a.slice(Math.max(0, i - 24), i).join('');
   let i = 0;
   while (i < src.length) {
     const c = src[i];
     if (c === '/' && src[i + 1] === '/') {
-      while (i < src.length && src[i] !== '\n') i++;
+      let j = i;
+      while (j < src.length && src[j] !== '\n') j++;
+      blank(i, j);
+      i = j;
       continue;
     }
     if (c === '/' && src[i + 1] === '*') {
       const e = src.indexOf('*/', i + 2);
-      i = e < 0 ? src.length : e + 2;
+      const j = e < 0 ? src.length : e + 2;
+      blank(i, j);
+      i = j;
       continue;
     }
     if (c === '"' || c === "'") {
@@ -76,13 +93,15 @@ export function stripLiterals(src: string): string {
         if (src[j] === '\\') j++;
         j++;
       }
-      out += KEEP_BEFORE.test(out) ? src.slice(i, j + 1) : c + c;
+      if (!KEEP_BEFORE.test(before(i))) blank(i + 1, Math.min(j, src.length));
       i = j + 1;
       continue;
     }
     if (c === '`') {
+      const keep = KEEP_BEFORE.test(before(i));
+      const texts: Array<[number, number]> = [];
+      let segStart = i + 1;
       let j = i + 1;
-      let code = '';
       while (j < src.length && src[j] !== '`') {
         if (src[j] === '\\') { j += 2; continue; }
         if (src[j] === '$' && src[j + 1] === '{') {
@@ -93,20 +112,23 @@ export function stripLiterals(src: string): string {
             else if (src[k] === '}') depth--;
             k++;
           }
-          code += ` ${stripLiterals(src.slice(j + 2, k - 1))} `;
+          texts.push([segStart, j]);
+          const inner = stripLiterals(src.slice(j + 2, k - 1));
+          for (let m = 0; m < inner.length; m++) a[j + 2 + m] = inner[m];
+          segStart = k;
           j = k;
           continue;
         }
         j++;
       }
-      out += KEEP_BEFORE.test(out) ? src.slice(i, j + 1) : '``' + code;
+      texts.push([segStart, Math.min(j, src.length)]);
+      if (!keep) for (const [s, e] of texts) blank(s, e);
       i = j + 1;
       continue;
     }
-    out += c;
     i++;
   }
-  return out;
+  return a.join('');
 }
 
 const STR = /(['"`])((?:\\.|(?!\1)[^\\])*)\1/g;
@@ -148,17 +170,18 @@ const RE_VARUSE = /\$(?:\(|items\()\s*([A-Za-z_$][\w$]*)\s*[,)]|\$node\s*\[\s*([
 
 export function extractRefs(raw: string): Extracted {
   const src = stripLiterals(raw);
-  const byName = new Map<string, Set<string>>();
-  const add = (name: string, f?: string) => {
-    const set = byName.get(name) ?? new Set<string>();
-    if (f) set.add(f);
-    byName.set(name, set);
+  const byName = new Map<string, { fields: Set<string>; at: number[] }>();
+  const add = (name: string, at: number, f?: string) => {
+    const cur = byName.get(name) ?? { fields: new Set<string>(), at: [] };
+    if (f) cur.fields.add(f);
+    cur.at.push(at);
+    byName.set(name, cur);
   };
   const scan = (re: RegExp, needAccessor: boolean) => {
     re.lastIndex = 0;
     let m: RegExpExecArray | null;
     while ((m = re.exec(src))) {
-      add(unescape(m[2]), field(src.slice(re.lastIndex, re.lastIndex + 240), needAccessor));
+      add(unescape(m[2]), m.index, field(src.slice(re.lastIndex, re.lastIndex + 240), needAccessor));
     }
   };
   scan(RE_PAREN, true);
@@ -185,7 +208,7 @@ export function extractRefs(raw: string): Extracted {
   }
 
   return {
-    refs: [...byName].map(([name, f]) => ({ name, fields: [...f].sort() })),
+    refs: [...byName].map(([name, v]) => ({ name, fields: [...v.fields].sort(), at: v.at.sort((x, y) => x - y) })),
     inferred: [...inferred],
     env: names(RE_ENV),
     vars: names(RE_VARS),

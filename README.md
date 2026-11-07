@@ -113,7 +113,9 @@ $ flownav affected "Normalize" --rename
 wf-orders:Normalize — impact of rename
 2 node(s) reference "Normalize" by name and will break unless their expressions are rewritten:
   × wf-orders:Notify Sales uses {email}  in text
+      text: {{ 'Big order from ' + $('Normalize').item.json.email }}
   × wf-orders:Orphan Code uses {email}  in jsCode
+      jsCode: L1: const row = $('Normalize').first().json.email;
 ```
 
 **A path, even across workflows**
@@ -163,7 +165,7 @@ $ flownav check
   INFO  no-error-handler   [wf-enrich] Enrich customer has no error workflow and no node-level error handling
 ```
 
-`check` exits with code 1 when it finds an `ERROR`, so it can run in CI.
+`check` exits with code 1 when it finds an `ERROR`. Use `--fail-on warn` (or `info`) to fail on less severe findings, `--fail-on none` to always exit 0, and `--only a,b` to run just some checks. See [Use it in CI](#use-it-in-ci).
 
 ## Using it with an AI agent
 
@@ -250,7 +252,8 @@ flownav path <A> <B> [--max N --kinds a,b]
 flownav find [--type --cred --text --name --resource --workflow --match --disabled --trigger]
 flownav affected <node> --rename|--delete|--schema|--behavior
 flownav callers <workflow> | calls <workflow> | uses --cred <c>
-flownav check [--only fragile-reads|dead-refs|cycles|unreachable|dead-ends|no-error-handler|webhook-no-respond]
+flownav check [--only a,b] [--fail-on error|warn|info|none]
+                                      checks: fragile-reads, dead-refs, cycles, unreachable, dead-ends, no-error-handler, webhook-no-respond
 flownav view [workflow] [--match text --collapse --focus <node> --depth N --out file.html --open]
 flownav diagram [workflow] [--match text --collapse --focus <node> --depth N --no-reads --dir LR|TD --out file.md]
 flownav diff old.json new.json        what changed between two graphs
@@ -259,6 +262,32 @@ flownav serve                         MCP server on stdio
 ```
 
 Global options: `--graph <file>` and `--format text|json`. Nodes are addressed as `Name` or `workflow:Name` (workflow id or name).
+
+## Use it in CI
+
+`flownav check` exits with code 1 when it finds an error, and `--only dead-refs` limits it to broken references (a node that reads a node that no longer exists, a connection to a missing node, a call to a missing workflow). Two ways to feed it, as a GitHub Actions example:
+
+```yaml
+name: n8n workflow check
+on: [pull_request]
+jobs:
+  flownav:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # Option A: workflow JSON exported into the repo (e.g. ./workflows)
+      - run: npx -y flownav build ./workflows
+      # Option B: a live instance with a read-only API key stored as a secret
+      # - run: npx -y flownav sync --url ${{ secrets.N8N_URL }}
+      #   env:
+      #     N8N_API_KEY: ${{ secrets.N8N_API_KEY }}
+      - run: npx -y flownav check --only dead-refs
+```
+
+For a manual "before I touch this" step, run `flownav affected "Node" --rename` instead. flownav is static analysis: it can only gate on what it can see, so references built at runtime are reported as unresolved and are not failures.
 
 ## Privacy and safety
 

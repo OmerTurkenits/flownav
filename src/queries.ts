@@ -163,6 +163,8 @@ export function affected(g: G, q: string, mode: AffectMode = 'rename'): Out {
   const lines: string[] = [`${g.label(n.id)} — impact of ${mode}`];
   const data: Record<string, unknown> = { node: n.id, mode };
 
+  /** the reader line, then the exact expression or code line(s) under it */
+  const withSnips = (head: string, e: Edge): string[] => [head, ...(e.snippets ?? []).map((s) => `      ${s.param}: ${s.text}`)];
   const fmtReader = (e: Edge) =>
     `${g.label(e.to)}${e.fields?.length ? ` uses {${e.fields.join(', ')}}` : ''}  in ${(e.params ?? []).join(', ')}${e.confidence === 'INFERRED' ? '  (inferred from a literal name list)' : ''}`;
 
@@ -172,7 +174,7 @@ export function affected(g: G, q: string, mode: AffectMode = 'rename'): Out {
         ? `${readers.length} node(s) reference "${n.name}" by name and will ${mode === 'rename' ? 'break unless their expressions are rewritten' : 'read a missing node'}:`
         : `No expression references "${n.name}" by name.${mode === 'rename' ? " Safe to rename (connections are keyed by name; update them with the rename)." : ''}`,
     );
-    for (const e of readers) lines.push(`  × ${fmtReader(e)}`);
+    for (const e of readers) lines.push(...withSnips(`  × ${fmtReader(e)}`, e));
     data.breaks = readers;
   }
   if (mode === 'delete') {
@@ -203,7 +205,7 @@ export function affected(g: G, q: string, mode: AffectMode = 'rename'): Out {
     lines.push(
       readers.length ? 'nodes reading fields from this node:' : 'No node reads this node by name.',
     );
-    for (const e of readers) lines.push(`  ! ${fmtReader(e)}`);
+    for (const e of readers) lines.push(...withSnips(`  ! ${fmtReader(e)}`, e));
     const succ = g.outE(n.id, ['main']);
     if (succ.length) {
       lines.push('direct successors (may use $json / $input, field use is not tracked):');

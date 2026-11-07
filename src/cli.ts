@@ -167,13 +167,19 @@ program.command('uses').requiredOption('--cred <c>').action((o) => run(() => emi
 program
   .command('check')
   .description(`Health checks (${ALL_CHECKS.join(', ')})`)
-  .option('--only <name>', 'run a single check')
+  .option('--only <names>', 'run only these checks (comma separated)')
+  .option('--fail-on <level>', 'exit 1 when a finding is at least this severe: error | warn | info | none', 'error')
   .action((o) => run(() => {
-    if (o.only && !ALL_CHECKS.includes(o.only)) throw new Error(`Unknown check. Choose: ${ALL_CHECKS.join(', ')}`);
+    const only = o.only ? String(o.only).split(',').map((s) => s.trim()).filter(Boolean) : undefined;
+    const bad = (only ?? []).filter((x) => !ALL_CHECKS.includes(x as CheckName));
+    if (bad.length) throw new Error(`Unknown check "${bad.join(', ')}". Choose from: ${ALL_CHECKS.join(', ')}`);
+    const rank: Record<string, number> = { error: 0, warn: 1, info: 2 };
+    const failOn = String(o.failOn);
+    if (failOn !== 'none' && !(failOn in rank)) throw new Error('--fail-on must be one of: error, warn, info, none');
     const g = load();
-    const f = runChecks(g, o.only ? [o.only as CheckName] : undefined);
+    const f = runChecks(g, only as CheckName[] | undefined);
     emit(formatFindings(g, f));
-    if (f.some((x) => x.severity === 'error')) process.exitCode = 1;
+    if (failOn !== 'none' && f.some((x) => rank[x.severity] <= rank[failOn])) process.exitCode = 1;
   })());
 program
   .command('diagram [workflow]')

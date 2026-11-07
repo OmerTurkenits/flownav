@@ -1,8 +1,20 @@
-import { expressionBodies, extractRefs } from './expressions.js';
+import { expressionBlocks, extractRefs } from './expressions.js';
 import type {
   CallRef, Edge, GNode, RawNode, RawWorkflow, Unresolved, WorkflowInfo, WorkflowResult,
 } from './types.js';
 import { redactString, rlValue, sha, shortType, stable, trunc, walkStrings } from './util.js';
+
+const MAX_SNIPPETS = 3;
+const clip = (s: string, n = 140): string => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
+
+/** `L12: <the line>` for a reference at offset `at` of a code string. */
+function codeSnippet(raw: string, at: number): string {
+  const line = raw.slice(0, at).split('\n').length;
+  const start = raw.lastIndexOf('\n', at - 1) + 1;
+  let end = raw.indexOf('\n', at);
+  if (end < 0) end = raw.length;
+  return `L${line}: ${clip(raw.slice(start, end).trim())}`;
+}
 
 const CODE_KEYS = new Set(['jsCode', 'pythonCode', 'functionCode', 'code']);
 const CODE_TYPES = new Set(['code', 'function', 'functionItem']);
@@ -249,27 +261,38 @@ export function buildWorkflow(raw: RawWorkflow, id: string, file?: string): Work
   // Expression / code references -> reads edges (source -> reader).
   for (const n of real) {
     const isCodeNode = CODE_TYPES.has(shortType(n.type));
-    const acc = new Map<string, { fields: Set<string>; params: Set<string> }>();
+    const acc = new Map<string, { fields: Set<string>; params: Set<string>; snips: Map<string, { param: string; text: string }> }>();
     const inf = new Map<string, Set<string>>();
     const envs = new Set<string>();
     let dynamic = 0;
     walkStrings(n.parameters, (s, path, key) => {
-      let body: string | undefined;
       // Only {{ }} blocks are expressions; the rest of an "=" string is literal text
       // (e.g. an HTML page whose browser JS contains $('form')).
-      if (s.startsWith('=')) body = expressionBodies(s);
-      else if (isCodeNode && CODE_KEYS.has(key)) body = s;
-      if (!body) return;
-      const ex = extractRefs(body);
-      dynamic += ex.dynamic;
-      ex.env.forEach((e) => envs.add(`res:env:${e}`));
-      ex.vars.forEach((e) => envs.add(`res:var:${e}`));
-      for (const name of ex.inferred) inf.set(name, new Set([...(inf.get(name) ?? []), path]));
-      for (const r of ex.refs) {
-        const a = acc.get(r.name) ?? { fields: new Set<string>(), params: new Set<string>() };
-        r.fields.forEach((f) => a.fields.add(f));
-        a.params.add(path);
-        acc.set(r.name, a);
+      const units: Array<{ body: string; snip: (at: number) => string }> = [];
+      if (s.startsWith('=')) {
+        for (const b of expressionBlocks(s)) {
+          const whole = clip(s.slice(b.start, b.end).replace(/\s+/g, ' ').trim());
+          units.push({ body: b.body, snip: () => whole });
+        }
+      } else if (isCodeNode && CODE_KEYS.has(key)) {
+        units.push({ body: s, snip: (at) => codeSnippet(s, at) });
+      }
+      for (const u of units) {
+        const ex = extractRefs(u.body);
+        dynamic += ex.dynamic;
+        ex.env.forEach((e) => envs.add(`res:env:${e}`));
+        ex.vars.forEach((e) => envs.add(`res:var:${e}`));
+        for (const name of ex.inferred) inf.set(name, new Set([...(inf.get(name) ?? []), path]));
+        for (const r of ex.refs) {
+          const a = acc.get(r.name) ?? { fields: new Set<string>(), params: new Set<string>(), snips: new Map() };
+          r.fields.forEach((f) => a.fields.add(f));
+          a.params.add(path);
+          for (const at of r.at) {
+            const text = u.snip(at);
+            a.snips.set(`${path}\u0000${text}`, { param: path, text });
+          }
+          acc.set(r.name, a);
+        }
       }
     });
     for (const [name, a] of acc) {
@@ -281,6 +304,7 @@ export function buildWorkflow(raw: RawWorkflow, id: string, file?: string): Work
       edges.push({
         from: nid(name), to: nid(n.name), kind: 'reads', confidence: 'EXTRACTED',
         fields: [...a.fields].sort(), params: [...a.params].sort(),
+        snippets: [...a.snips.values()].slice(0, MAX_SNIPPETS),
       });
     }
     // Names reached via a loop variable over a literal list: real dependencies, but only INFERRED.

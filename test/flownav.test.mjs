@@ -289,3 +289,41 @@ test('version comes from package.json for the CLI and the MCP server', async () 
   p.kill();
   assert.equal(JSON.parse(out.split('\n')[0]).result.serverInfo.version, want);
 });
+
+test('stripLiterals keeps offsets: same length, newlines kept, refs still found at the right place', async () => {
+  const { stripLiterals, extractRefs } = await import('../dist/expressions.js');
+  const code = "const a = 'x $(\"fake\") y'; // $('commented')\nconst t = `${$('Real').item.json.id} $('inText')`;\nreturn $(\"Other\").first();";
+  const out = stripLiterals(code);
+  assert.equal(out.length, code.length);
+  assert.deepEqual([...code].map((c, i) => (c === '\n') === (out[i] === '\n')).every(Boolean), true);
+  const refs = Object.fromEntries(extractRefs(code).refs.map((r) => [r.name, r.at]));
+  assert.deepEqual(Object.keys(refs).sort(), ['Other', 'Real']);
+  assert.equal(code.slice(refs.Real[0], refs.Real[0] + 9), "$('Real')");
+  assert.equal(code.slice(refs.Other[0], refs.Other[0] + 10), '$("Other")');
+});
+
+test('affected shows the exact expression or code line under each reader', () => {
+  const text = affected(g, 'wf-orders:Normalize', 'rename').text;
+  assert.match(text, /text: \{\{ 'Big order from ' \+ \$\('Normalize'\)\.item\.json\.email \}\}/);
+  assert.match(text, /jsCode: L1: const row = \$\('Normalize'\)\.first\(\)\.json\.email;/);
+  const e = graph.edges.find((x) => x.kind === 'reads' && x.to === 'wf-orders::Orphan Code' && x.from === 'wf-orders::Normalize');
+  assert.ok(e.snippets.length >= 1 && e.snippets.length <= 3);
+});
+
+test('check: --fail-on levels and comma separated --only', async () => {
+  const { spawnSync } = await import('node:child_process');
+  const { writeFileSync, mkdtempSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const file = join(mkdtempSync(join(tmpdir(), 'fn-')), 'graph.json');
+  writeFileSync(file, JSON.stringify(graph));
+  const cli = join(dirname(fileURLToPath(import.meta.url)), '..', 'dist', 'cli.js');
+  const code = (...a) => spawnSync(process.execPath, [cli, 'check', '--graph', file, ...a], { encoding: 'utf8' });
+  assert.equal(code().status, 1);                                    // has an ERROR
+  assert.equal(code('--fail-on', 'none').status, 0);
+  assert.equal(code('--only', 'unreachable').status, 0);             // warn only, default fails on error
+  assert.equal(code('--only', 'unreachable', '--fail-on', 'warn').status, 1);
+  assert.equal(code('--only', 'cycles,dead-ends').status, 0);
+  assert.equal(code('--only', 'cycles,dead-ends', '--fail-on', 'info').status, 1);
+  assert.match(code('--only', 'nope').stderr, /Unknown check "nope"/);
+  assert.match(code('--fail-on', 'loud').stderr, /--fail-on must be one of/);
+});
