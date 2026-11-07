@@ -1,9 +1,11 @@
 import { statSync } from 'node:fs';
+import { dirname } from 'node:path';
 import { createInterface } from 'node:readline';
 import { ALL_CHECKS, formatFindings, runChecks } from './checks.js';
 import type { CheckName } from './checks.js';
 import { G } from './graph.js';
 import { affected, callers, calls, explain, find, neighbors, paths, uses } from './queries.js';
+import { readNode } from './read.js';
 import type { AffectMode } from './queries.js';
 import { report, scan } from './report.js';
 import { graphPath, loadGraph } from './store.js';
@@ -13,7 +15,8 @@ import { VERSION } from './version.js';
 type Args = Record<string, any>;
 const str = { type: 'string' } as const;
 
-const TOOLS: Array<{ name: string; description: string; schema: object; run: (g: G, a: Args) => Out | string }> = [
+type Ctx = { dir: string };
+const TOOLS: Array<{ name: string; description: string; schema: object; run: (g: G, a: Args, ctx: Ctx) => Out | string | Promise<Out | string> }> = [
   { name: 'flownav_scan', description: 'Inventory: workflows, entry points, node-type histogram. Start here.', schema: {}, run: (g) => scan(g) },
   { name: 'flownav_explain', description: 'Compact card for one node: summary, labeled inputs/outputs, reads, credentials, cross-workflow links. Use "workflow:node" if the name is ambiguous. If the reply says the name matches several nodes, ask the user which; never pick one yourself.', schema: { node: str }, run: (g, a) => explain(g, a.node) },
   { name: 'flownav_neighbors', description: 'Nodes within N hops of a node.', schema: { node: str, depth: { type: 'number' }, dir: { enum: ['in', 'out', 'both'] } }, run: (g, a) => neighbors(g, a.node, a.depth ?? 1, a.dir ?? 'both') },
@@ -24,6 +27,12 @@ const TOOLS: Array<{ name: string; description: string; schema: object; run: (g:
   { name: 'flownav_calls', description: 'What this workflow calls, plus unresolved dynamic calls.', schema: { workflow: str }, run: (g, a) => calls(g, a.workflow) },
   { name: 'flownav_uses', description: 'Nodes that use a credential (id, name or type).', schema: { credential: str }, run: (g, a) => uses(g, a.credential) },
   { name: 'flownav_check', description: `Health checks: ${ALL_CHECKS.join(', ')}. Pass only="a,b" to run some.`, schema: { only: str }, run: (g, a) => formatFindings(g, runChecks(g, a.only ? (String(a.only).split(',').map((x) => x.trim()) as CheckName[]) : undefined)) },
+  {
+    name: 'flownav_read',
+    description: 'Read PART of one node\'s code (or other long text) instead of the whole node. Start with the default outline (size, functions, which nodes the code references, with line numbers), then grep for a name or read a line range. Replies are capped at about 6,000 characters and secrets are redacted. Use cols to read inside very long (minified) lines. If the reply says the workflow changed since the graph was built, ask the user to sync. If the name is ambiguous or only a partial match, ask the user which node before acting.',
+    schema: { node: str, param: str, lines: str, grep: str, regex: { type: 'boolean' }, caseSensitive: { type: 'boolean' }, context: { type: 'number' }, max: { type: 'number' }, outline: { type: 'boolean' }, cols: str },
+    run: (g, a, ctx) => readNode(g, { node: a.node, param: a.param, lines: a.lines, grep: a.grep, regex: a.regex, caseSensitive: a.caseSensitive, context: a.context, max: a.max, outline: a.outline, cols: a.cols, dir: ctx.dir }),
+  },
   { name: 'flownav_report', description: 'Full markdown workflow report.', schema: {}, run: (g) => report(g) },
 ];
 
@@ -60,12 +69,12 @@ export function serve(graphFile?: string): void {
       } else if (method === 'tools/call') {
         const tool = TOOLS.find((t) => t.name === params?.name);
         if (!tool) return void fail(-32602, `Unknown tool ${params?.name}`);
-        try {
-          const r = tool.run(getG(), params.arguments ?? {});
-          reply({ content: [{ type: 'text', text: typeof r === 'string' ? r : r.text }] });
-        } catch (err) {
-          reply({ isError: true, content: [{ type: 'text', text: (err as Error).message }] });
-        }
+        Promise.resolve()
+          .then(() => tool.run(getG(), params.arguments ?? {}, { dir: dirname(file) }))
+          .then(
+            (r) => reply({ content: [{ type: 'text', text: typeof r === 'string' ? r : r.text }] }),
+            (err: Error) => reply({ isError: true, content: [{ type: 'text', text: err.message }] }),
+          );
       } else if (id !== undefined) {
         fail(-32601, `Method not found: ${method}`);
       }

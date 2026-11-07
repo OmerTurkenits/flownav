@@ -20,6 +20,7 @@ Then query the graph; do not open workflow JSON unless the graph cannot answer.
 - \`flownav affected "<node>" --rename|--delete|--schema|--behavior\` **run before renaming or deleting a node**: references like \`$('Old Name')\` are not reliably rewritten (reportedly not inside Code nodes, and not for renames made through the API or by editing JSON), so list them first
 - \`flownav callers <workflow>\` / \`calls <workflow>\` cross-workflow links
 - \`flownav check\` fragile reads, dead refs, unreachable nodes, cycles, missing error handling
+- \`flownav read "<node>"\` read part of a Code node: start with the default outline (size, functions, node references with line numbers), then \`--grep "text"\` or \`--lines 120-180\`. Never read a whole large node at once; every reply is capped and secrets are redacted
 
 ## When the request is not specific
 

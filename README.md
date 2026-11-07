@@ -173,7 +173,7 @@ $ flownav check
 flownav install claude --mcp     # writes .claude/skills/flownav/SKILL.md and .mcp.json
 ```
 
-This installs a skill that tells the agent to query flownav before reading, renaming or deleting nodes, and registers an MCP server (`flownav serve`, stdio) exposing `flownav_scan`, `explain`, `neighbors`, `path`, `find`, `affected`, `callers`, `calls`, `uses`, `check` and `report`. The server reads `.flownav/graph.json` from the working directory (or `--graph <file>`) and reloads it when the file changes. The skill works without MCP too, as long as the agent can run shell commands.
+This installs a skill that tells the agent to query flownav before reading, renaming or deleting nodes, and registers an MCP server (`flownav serve`, stdio) exposing `flownav_scan`, `explain`, `neighbors`, `path`, `find`, `affected`, `callers`, `calls`, `uses`, `check`, `read` and `report`. The server reads `.flownav/graph.json` from the working directory (or `--graph <file>`) and reloads it when the file changes. The skill works without MCP too, as long as the agent can run shell commands.
 
 A typical rename: the agent runs `scan` to find the workflow id, then `affected "wf-orders:Normalize"`, edits the listed expressions together with the rename using whatever tool it has for editing n8n, syncs again, and runs `check` to confirm nothing dangles. flownav does not write to n8n; it tells the agent what is safe.
 
@@ -191,6 +191,38 @@ error: "order" matches 5 nodes. Do not guess: ask the user which one they mean. 
 ```
 
 If a partial name matches exactly one node, it resolves but the reply starts with a `NOTE:` asking the agent to confirm with the user before changing anything. To search a family of workflows, use `flownav find --match "<part of workflow name>" --name "<part of node name>"` (`--name` searches node names only; `--text` also searches parameters and code). The installed skill tells the agent to stop and ask in these cases. How reliably an agent follows that depends on the agent.
+
+## Reading code in small pieces
+
+flownav normally returns structure (cards, paths, references), not code. When an agent (or you) needs to read a large Code node, `read` returns it in small, capped slices instead of the whole node:
+
+```text
+$ flownav read "Orphan Code"                 # default: an outline
+wf-orders:Orphan Code · jsCode · 3 line(s), 127 chars
+longest line: 46 chars
+functions: none found
+node references:
+  Normalize  line 1  {email}
+  Deleted Step  line 2  {x}
+next: grep for a name, or read a range with lines
+
+$ flownav read "Orphan Code" --grep normalize
+wf-orders:Orphan Code · jsCode · 3 line(s), 127 chars
+> 1: const row = $('Normalize').first().json.email;
+  2: const gone = $('Deleted Step').first().json.x;
+  3: return [{ json: { row, gone } }];
+1 of 1 matching line(s) shown
+
+$ flownav read "Orphan Code" --lines 2-3
+```
+
+- **Outline** (the default): size, the longest line, function names, and which nodes the code references, all with line numbers, so you can pick a slice without reading blindly.
+- **`--grep <pattern>`**: matching lines with context (`--context`, default 2, up to 10), overlapping windows merged, up to `--max` matches (default 20). Literal and case-insensitive by default; `--regex` and `--case` change that.
+- **`--lines 120-180`** (also `120` or `120-`): numbered lines, with a hint for the next slice. An open-ended range returns 60 lines.
+- **Long lines:** a line over 240 characters is shown windowed, and `--cols 241-480` reads inside it, which is what you need for minified or generated code.
+- **`--param`** reads another text parameter (for example an HTML field); without it, `read` uses `jsCode`, `pythonCode`, `functionCode` or `code`.
+
+Every reply is capped at about 6,000 characters whatever you ask for, and secrets in the code are redacted (key-like assignments such as `apiKey = "..."`, and token shapes such as `Bearer ...`; this is best-effort, not a guarantee). `read` takes the code from your exported files, or does one read-only `GET` of that workflow from your instance (it needs the API key in the environment variable named by your profile, `N8N_API_KEY` by default). `--from <folder>` reads from a folder of exports instead. If the workflow changed since the graph was built, the reply starts with a warning and shows the current source. The MCP tool `flownav_read` does the same and cannot be pointed at other folders.
 
 ## Seeing the graph
 
@@ -252,6 +284,9 @@ flownav path <A> <B> [--max N --kinds a,b]
 flownav find [--type --cred --text --name --resource --workflow --match --disabled --trigger]
 flownav affected <node> --rename|--delete|--schema|--behavior
 flownav callers <workflow> | calls <workflow> | uses --cred <c>
+flownav read <node> [--outline | --grep p [--regex --case --context n --max n] | --lines a-b]
+                    [--param p --cols a-b --from path]     read part of a Code node, capped and redacted
+flownav stats [--from path]           measure raw JSON tokens against flownav replies on your workflows
 flownav check [--only a,b] [--fail-on error|warn|info|none]
                                       checks: fragile-reads, dead-refs, cycles, unreachable, dead-ends, no-error-handler, webhook-no-respond
 flownav view [workflow] [--match text --collapse --focus <node> --depth N --out file.html --open]
@@ -295,6 +330,7 @@ For a manual "before I touch this" step, run `flownav affected "Node" --rename` 
 - `pinData` (sample execution data) is dropped on load and never stored.
 - String parameters are redacted before being kept for search: values under secret-looking keys (`apiKey`, `token`, `password`, `Authorization`, ...) and known token shapes (Bearer, `sk-...`, GitHub, Slack, AWS, JWT).
 - Credentials are recorded by id and type only.
+- `flownav read` is the one command that returns code. It redacts key-like assignments and token shapes (best-effort), caps every reply, and for live graphs makes a single read-only `GET` of the one workflow it needs.
 - Execution data is not fetched; `--executions` records only the last status per workflow.
 - `.flownav/` holds your graph and is git-ignored by this repo. Don't commit it or share the HTML views if your workflows are sensitive.
 
@@ -303,7 +339,7 @@ For a manual "before I touch this" step, run `flownav affected "Node" --rename` 
 This is a back-of-the-envelope model, not a measurement of real agent sessions. Tokens are estimated as characters ÷ 4.
 
 - **n**: nodes the agent would otherwise read; **τ**: tokens per node in raw n8n JSON (assumed 300, it varies a lot: Code and HTML nodes are far heavier than a Set node); **W = n·τ**.
-- **S ≈ 1,300 tokens**: flownav's fixed overhead per session (the 11 MCP tool definitions, about 800 tokens, plus the skill, about 500).
+- **S ≈ 1,600 tokens**: flownav's fixed overhead per session (the 12 MCP tool definitions, about 1,000 tokens, plus the skill, about 550).
 - **r ≈ 100 tokens**: a typical reply. `explain` and `affected` replies are tens of tokens; a `scan` of a dozen workflows is a few hundred.
 - With prompt caching, text read once costs about 1.25× the first time and about 0.1× on each later turn. For Q questions:
   - raw: `C_raw ≈ W · (1.25 + 0.1·(Q − 1))`
@@ -316,25 +352,25 @@ Raw reading grows with the workflow; a flownav reply depends only on a node's lo
 
 | workflow size | raw tokens | 1 question | 10 questions |
 |---|---|---|---|
-| 5 nodes | 1,500 | 8% | −18% (costs more) |
-| 10 nodes | 3,000 | 54% | 41% |
-| 30 nodes | 9,000 | 85% | 80% |
-| 132 nodes | 40,000 | 97% | 96% |
-| whole instance (443 nodes) | 133,000 | 99% | 99% |
+| 5 nodes | 1,500 | −12% (costs more) | −38% (costs more) |
+| 10 nodes | 3,000 | 44% | 31% |
+| 30 nodes | 9,000 | 81% | 77% |
+| 132 nodes | 40,000 | 96% | 95% |
+| whole instance (443 nodes) | 133,000 | 99% | 98% |
 
 **Saving when the agent searches and reads only a fraction of a 132-node workflow:**
 
 | fraction read | 1 question | 10 questions |
 |---|---|---|
-| 30% | 89% | 85% |
-| 20% | 83% | 78% |
-| 10% | 66% | 56% |
+| 30% | 86% | 83% |
+| 20% | 79% | 74% |
+| 10% | 58% | 48% |
 
 What to take from it:
 
 - Below roughly 6 nodes, reading the JSON is cheaper than loading the tools. Around 10 to 30 nodes flownav saves about half to four fifths; on large workflows the saving approaches 100%.
 - Most agents search instead of reading everything, so for large workflows a realistic range is about 55 to 90%; the 96% rows are the best case.
-- τ is the main unknown. To get a real figure, measure the size of your own exports, or run the same task with and without flownav and compare the usage Claude reports, several times, since agent runs vary.
+- τ is the main unknown, and `flownav stats` measures it on your own workflows (the bundled examples come out at about 130 tokens per node, well below the 300 assumed here, because they are small and hand-written; real Code and HTML nodes are far heavier). You can also run the same task with and without flownav and compare the usage Claude reports, several times, or measure the size of your own exports, or run the same task with and without flownav and compare the usage Claude reports, several times, since agent runs vary.
 - Tokens are not the only benefit: `affected` finds `$('Name')` references in expressions and Code nodes that a skimming agent misses.
 
 ## Limitations

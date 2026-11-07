@@ -11,8 +11,10 @@ import { G } from './graph.js';
 import { installClaude } from './install.js';
 import { serve } from './mcp.js';
 import { affected, callers, calls, explain, find, neighbors, paths, uses } from './queries.js';
+import { readNode } from './read.js';
 import type { AffectMode } from './queries.js';
 import { report, scan } from './report.js';
+import { stats } from './stats.js';
 import { buildFromFiles, N8nApi, syncApi } from './source.js';
 import { DEFAULT_DIR, graphPath, loadGraph, loadProfiles, saveGraph, saveProfiles, writeText } from './store.js';
 import { FLOW_KINDS } from './types.js';
@@ -180,6 +182,33 @@ program
     const f = runChecks(g, only as CheckName[] | undefined);
     emit(formatFindings(g, f));
     if (failOn !== 'none' && f.some((x) => rank[x.severity] <= rank[failOn])) process.exitCode = 1;
+  })());
+program
+  .command('read <node>')
+  .description("Read part of a node's code in small pieces: outline (default), --grep, or --lines")
+  .option('--param <name>', 'parameter to read (default: the code parameter)')
+  .option('--lines <range>', '"120-180", "120" or "120-"')
+  .option('--grep <pattern>', 'lines matching a pattern, with context')
+  .option('--regex', 'treat the grep pattern as a regular expression')
+  .option('--case', 'case-sensitive grep')
+  .option('--context <n>', 'lines around each grep match', '2')
+  .option('--max <n>', 'grep matches to show', '20')
+  .option('--outline', 'size, functions and node references with line numbers')
+  .option('--cols <range>', 'character window per line, e.g. 241-480')
+  .option('--from <path>', 'read the source from this folder of exported workflows')
+  .action((n: string, o) => run(async () => {
+    emit(await readNode(load(), {
+      node: n, param: o.param, lines: o.lines, grep: o.grep, regex: o.regex, caseSensitive: o.case,
+      context: Number(o.context), max: Number(o.max), outline: o.outline, cols: o.cols, from: o.from,
+      dir: dirname(opts().graph ?? graphPath()),
+    }));
+  })());
+program
+  .command('stats')
+  .description('Measure raw workflow JSON size against flownav replies on your own workflows')
+  .option('--from <path>', 'read the workflows from this folder of exports')
+  .action((o) => run(async () => {
+    emit(await stats(load(), { from: o.from, dir: dirname(opts().graph ?? graphPath()) }));
   })());
 program
   .command('diagram [workflow]')
