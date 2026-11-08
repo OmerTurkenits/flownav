@@ -142,10 +142,11 @@ aside li button{width:100%;text-align:left;margin:2px 0;border-radius:6px;overfl
 <script>
 (function () {
   var D = JSON.parse(document.getElementById('data').textContent);
-  var NS = 'http://www.w3.org/2000/svg';
+  var svg = document.getElementById('svg'), vp = document.getElementById('vp'), panel = document.getElementById('panel');
+  // The page's own <svg> element already carries the SVG namespace; reuse it for new elements.
+  var NS = svg.namespaceURI;
   var NW = 176, NH = 38, COLW = 250, ROWH = 62, PAD = 36, HEAD = 34, GAP = 50;
   var LAYER = { main: 1, capability: 1, calls: 1, on_error: 1, webhook_calls: 1 };
-  var svg = document.getElementById('svg'), vp = document.getElementById('vp'), panel = document.getElementById('panel');
 
   function el(tag, attrs, parent, text) {
     var e = document.createElementNS(NS, tag);

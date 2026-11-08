@@ -327,3 +327,14 @@ test('check: --fail-on levels and comma separated --only', async () => {
   assert.match(code('--only', 'nope').stderr, /Unknown check "nope"/);
   assert.match(code('--fail-on', 'loud').stderr, /--fail-on must be one of/);
 });
+
+test('the published code contains no URL strings at all (supply-chain scanners flag them)', async () => {
+  const { readdirSync } = await import('node:fs');
+  const dist = join(dirname(fileURLToPath(import.meta.url)), '..', 'dist');
+  const hits = [];
+  for (const f of readdirSync(dist).filter((x) => x.endsWith('.js'))) {
+    const m = readFileSync(join(dist, f), 'utf8').match(/https?:\/\/[A-Za-z0-9./_-]+/g);
+    if (m) hits.push(`${f}: ${m.join(', ')}`);
+  }
+  assert.deepEqual(hits, []);
+});
