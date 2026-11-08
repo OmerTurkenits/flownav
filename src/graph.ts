@@ -66,7 +66,14 @@ export class G {
     if (part.length === 1) return part[0].id;
     const hits = exact.length ? exact : part;
     if (!hits.length) throw new Error(`No workflow matches "${q}". Run flownav_scan to list workflows.`);
-    const rows = hits.slice(0, 10).map((w, i) => `  ${i + 1}. ${w.name}  [id ${w.id}, ${w.nodeCount} nodes]`);
+    const rows = hits.slice(0, 10).flatMap((w, i) => {
+      const trig = [...new Set(this.nodesOf(w.id).filter((n) => n.trigger).map((n) => shortType(n.type)))];
+      const state = w.active === undefined ? '' : w.active ? ', active' : ', inactive';
+      return [
+        `  ${i + 1}. ${w.name}  [id ${w.id}, ${w.nodeCount} nodes${state}]`,
+        `       ${trig.length ? `started by: ${trig.slice(0, 4).join(', ')}` : 'no trigger of its own'}${w.errorWorkflow ? ' · has an error workflow' : ''}`,
+      ];
+    });
     if (hits.length > 10) rows.push(`  ... and ${hits.length - 10} more`);
     throw new Error(
       [`"${q}" matches ${hits.length} workflows. ${ASK} Then use its id.`, ...rows,
@@ -79,10 +86,27 @@ export class G {
     return this.resolveNodeEx(q).node;
   }
 
+  /** One line of context so the agent can tell candidates apart and ask a sharper question. */
+  private contextLine(n: GNode): string {
+    const bits: string[] = [n.summary];
+    if (n.group) bits.push(`group "${n.group}"`);
+    if (n.disabled) bits.push('disabled');
+    const names = (ids: string[]) => [...new Set(ids.map((id) => this.nodeById.get(id)?.name ?? id))];
+    const from = names(this.inE(n.id, ['main', 'capability']).map((e) => e.from));
+    const into = names(this.outE(n.id, ['capability']).map((e) => e.to));
+    if (n.trigger) bits.push('starts the workflow');
+    else if (from.length) bits.push(`after: ${from.slice(0, 2).join(', ')}${from.length > 2 ? ` (+${from.length - 2})` : ''}`);
+    else if (into.length) bits.push(`plugs into: ${into.slice(0, 2).join(', ')}`);
+    else bits.push('not connected to anything');
+    const line = bits.join(' · ');
+    return line.length > 150 ? `${line.slice(0, 149)}…` : line;
+  }
+
   private ambiguousNodes(q: string, hits: GNode[]): string {
-    const rows = hits.slice(0, 10).map(
-      (n, i) => `  ${i + 1}. ${this.g.workflows[n.wf]?.name ?? n.wf} › ${n.name}  [${shortType(n.type)}]  use: ${n.wf}:${n.name}`,
-    );
+    const rows = hits.slice(0, 10).flatMap((n, i) => [
+      `  ${i + 1}. ${this.g.workflows[n.wf]?.name ?? n.wf} › ${n.name}  [${shortType(n.type)}]  use: ${n.wf}:${n.name}`,
+      `       ${this.contextLine(n)}`,
+    ]);
     if (hits.length > 10) rows.push(`  ... and ${hits.length - 10} more`);
     return [`"${q}" matches ${hits.length} nodes. ${ASK} Then use the workflow:node form.`, ...rows].join('\n');
   }

@@ -185,12 +185,15 @@ Tool replies are written for an agent to act on. If a name matches several nodes
 $ flownav explain order
 error: "order" matches 5 nodes. Do not guess: ask the user which one they mean. Then use the workflow:node form.
   1. Order intake › Order Webhook  [webhook]  use: wf-orders:Order Webhook
+       Webhook POST /orders (responseNode) · group "Intake" · starts the workflow
   2. Order intake › Is Large Order  [if]  use: wf-orders:Is Large Order
+       IF 1 condition(s) · group "Intake" · after: Normalize
   3. Order intake › Save Order  [googleSheets]  use: wf-orders:Save Order
+       googleSheets: append · group "Intake" · after: Is Large Order
   ...
 ```
 
-If a partial name matches exactly one node, it resolves but the reply starts with a `NOTE:` asking the agent to confirm with the user before changing anything. To search a family of workflows, use `flownav find --match "<part of workflow name>" --name "<part of node name>"` (`--name` searches node names only; `--text` also searches parameters and code). The installed skill tells the agent to stop and ask in these cases. How reliably an agent follows that depends on the agent.
+Each candidate carries one line of context (what the node does, its sticky-note group, and what feeds it or what it plugs into), so the agent can ask a specific question instead of "which one?". Workflow candidates show their trigger types and whether they are active. If a partial name matches exactly one node, it resolves but the reply starts with a `NOTE:` asking the agent to confirm with the user before changing anything. To search a family of workflows, use `flownav find --match "<part of workflow name>" --name "<part of node name>"` (`--name` searches node names only; `--text` also searches parameters and code). The installed skill tells the agent to stop and ask in these cases. How reliably an agent follows that depends on the agent.
 
 ## Reading code in small pieces
 

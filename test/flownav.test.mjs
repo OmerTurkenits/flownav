@@ -338,3 +338,39 @@ test('the published code contains no URL strings at all (supply-chain scanners f
   }
   assert.deepEqual(hits, []);
 });
+
+test('ambiguity: each candidate carries context so the follow-up question can be specific', async () => {
+  const { mkdtempSync, writeFileSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  // the commenter's case: the same name in two workflows, different kinds of node
+  const dir = mkdtempSync(join(tmpdir(), 'fn-ctx-'));
+  const mk = (id, name, type, params, fedBy) => ({
+    id, name,
+    active: id === 'a',
+    nodes: [
+      { name: 'Start', type: 'n8n-nodes-base.webhook', parameters: { path: id } },
+      { name: 'Clean', type: 'n8n-nodes-base.set', parameters: {} },
+      { name: 'Save', type, parameters: params },
+    ],
+    connections: { Start: { main: [[{ node: 'Clean', type: 'main', index: 0 }]] }, Clean: { main: [[{ node: 'Save', type: 'main', index: 0 }]] } },
+  });
+  writeFileSync(join(dir, 'a.json'), JSON.stringify(mk('a', 'Web app', 'n8n-nodes-base.googleSheets', { operation: 'append' })));
+  writeFileSync(join(dir, 'b.json'), JSON.stringify(mk('b', 'Billing app', 'n8n-nodes-base.dataTable', { operation: 'upsert' })));
+  const cg = new G(buildFromFiles(dir).graph);
+  assert.throws(() => cg.resolveNode('Save'), (e) => {
+    const m = e.message;
+    return /matches 2 nodes\. Do not guess/.test(m)
+      && /Web app › Save {2}\[googleSheets\] {2}use: a:Save\n {7}googleSheets: append · after: Clean/.test(m)
+      && /Billing app › Save {2}\[dataTable\] {2}use: b:Save\n {7}dataTable: upsert · after: Clean/.test(m);
+  });
+  assert.throws(
+    () => cg.resolveWorkflow('app'), // both names contain "app"
+    (e) => /Web app {2}\[id a, 3 nodes, active\]\n {7}started by: webhook/.test(e.message) && /Billing app {2}\[id b, 3 nodes, inactive\]\n {7}started by: webhook/.test(e.message),
+  );
+
+  // sticky group, trigger and plug-in context from the bundled examples
+  const m = (() => { try { g.resolveNode('order'); } catch (e) { return e.message; } })();
+  assert.match(m, /Order Webhook {2}\[webhook\] {2}use: wf-orders:Order Webhook\n {7}Webhook POST \/orders \(responseNode\) · group "Intake" · starts the workflow/);
+  assert.match(m, /Lookup Order {2}\[toolWorkflow\] {2}use: wf-orders:Lookup Order\n {7}Tool: Execute workflow wf-enrich · plugs into: Support Agent/);
+  assert.match(m, /Loop Orders[^\n]*\n {7}splitInBatches · after: Ping Self, Nightly/);
+});

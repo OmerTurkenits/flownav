@@ -1,6 +1,6 @@
 {
   "name": "flownav",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "See what references an n8n node before you rename it. A typed graph of your workflows with a CLI and an MCP server, so AI agents read a few lines instead of the whole workflow JSON.",
   "author": "Omer Turkenits",
   "license": "MIT",
