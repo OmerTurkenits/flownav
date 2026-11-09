@@ -374,3 +374,21 @@ test('ambiguity: each candidate carries context so the follow-up question can be
   assert.match(m, /Lookup Order {2}\[toolWorkflow\] {2}use: wf-orders:Lookup Order\n {7}Tool: Execute workflow wf-enrich · plugs into: Support Agent/);
   assert.match(m, /Loop Orders[^\n]*\n {7}splitInBatches · after: Ping Self, Nightly/);
 });
+
+test('MCP registry files stay consistent: mcpName, server.json name/version/package match package.json', () => {
+  const root = join(dirname(fileURLToPath(import.meta.url)), '..');
+  const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
+  const srv = JSON.parse(readFileSync(join(root, 'server.json'), 'utf8'));
+  assert.match(pkg.mcpName, /^io\.github\.[A-Za-z0-9-]+\/flownav$/);
+  assert.equal(srv.name, pkg.mcpName);
+  assert.equal(srv.version, pkg.version);
+  assert.equal(srv.packages.length, 1);
+  assert.equal(srv.packages[0].identifier, pkg.name);
+  assert.equal(srv.packages[0].version, pkg.version);
+  assert.equal(srv.packages[0].registryType, 'npm');
+  assert.equal(srv.packages[0].transport.type, 'stdio');
+  assert.equal(srv.repository.source, 'github');
+  assert.ok(srv.description.length > 0 && srv.description.length <= 100, `description is ${srv.description.length} chars`);
+  // server.json is registry metadata only: it must not ship inside the npm package
+  assert.ok(!(pkg.files ?? []).includes('server.json'));
+});

@@ -1,0 +1,20 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.OmerTurkenits/flownav",
+  "description": "Read-only graph of n8n workflows for AI agents: explain, affected, check, scoped code reads.",
+  "repository": {
+    "url": "https://github.com/OmerTurkenits/flownav",
+    "source": "github"
+  },
+  "version": "0.2.2",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "flownav",
+      "version": "0.2.2",
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  ]
+}
